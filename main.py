@@ -8,38 +8,38 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 @bot.command()
 async def analyze(ctx, symbol: str):
-    await ctx.send(f"Analysing {symbol.upper()} with deep indicators...")
-    
-    # Data fetch
-    df = yf.download(f"{symbol.upper()}.KA", period="1y", interval="1d")
+    # Live approximation: period '5d' aur interval '15m' se data fast milta hai
+    ticker = f"{symbol.upper()}.KA"
+    df = yf.download(ticker, period="5d", interval="15m")
     
     if df.empty:
-        await ctx.send("Symbol not found.")
+        await ctx.send("❌ Data fetch nahi ho raha, ticker check karein.")
         return
 
-    # Indicators Calculation
-    df.ta.rsi(length=14, append=True)
-    df.ta.macd(append=True)
-    df.ta.bbands(length=20, append=True)
-    df.ta.sma(length=50, append=True)
-    
+    # Pivot Point Calculation (The exact formula used by pro apps)
     last = df.iloc[-1]
+    high = df['High'].max()
+    low = df['Low'].min()
+    close = last['Close']
     
-    # Volume Analysis
-    vol_avg = df['Volume'].rolling(window=20).mean().iloc[-1]
-    vol_status = "High Volume" if last['Volume'] > vol_avg else "Low Volume"
+    pivot = (high + low + close) / 3
+    r1 = (2 * pivot) - low
+    s1 = (2 * pivot) - high
     
-    # Breakout Logic
-    breakout = "BULLISH BREAKOUT" if last['Close'] > last['BBU_20_2.0'] else "Consolidation"
+    # Technicals
+    rsi = ta.rsi(df['Close'], length=14).iloc[-1]
+    macd = ta.macd(df['Close'])
+    macd_val = macd.iloc[-1, 0] # MACD Line
     
     reply = (
-        f"📊 **Deep Market Analysis: {symbol.upper()}**\n"
-        f"💰 **Price:** {last['Close']:.2f} PKR\n"
-        f"📈 **Volume Status:** {vol_status}\n"
-        f"🚀 **Breakout Status:** {breakout}\n"
-        f"⚡ **RSI:** {last['RSI_14']:.2f} | **MACD:** {last['MACD_12_26_9']:.2f}\n"
-        f"⛓️ **Bollinger Upper Band:** {last['BBU_20_2.0']:.2f}\n"
-        f"💡 **Candle Status:** {'Bullish' if last['Close'] > last['Open'] else 'Bearish'}"
+        f"🔴 **LIVE ANALYSIS: {symbol.upper()}**\n"
+        f"💰 **Price:** {close:.2f}\n\n"
+        f"📍 **Pivot Points:**\n"
+        f"• R1: {r1:.2f} | **PP: {pivot:.2f}** | S1: {s1:.2f}\n\n"
+        f"📊 **Indicators:**\n"
+        f"• RSI: {rsi:.2f}\n"
+        f"• MACD: {macd_val:.4f}\n\n"
+        f"💡 **Status:** {'Bullish' if close > pivot else 'Bearish'}"
     )
     await ctx.send(reply)
 
