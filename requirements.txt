@@ -1,5 +1,6 @@
 discord.py
 yfinance
 pandas
-numpy
-pandas-ta
+pandas_ta
+requests
+beautifulsoup4
