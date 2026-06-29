@@ -1,106 +1,46 @@
 import discord
 from discord.ext import commands
 import yfinance as yf
-import pandas as pd
-import numpy as np
+import pandas_ta as ta
 import os
 
-# Prefix '!' set kiya hai taake koi slash command ka error na aaye
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
-@bot.event
-async def on_ready():
-    print(f'Bot successfully logged in as: {bot.user}')
-
-@bot.command(name='psx')
-async def psx_analysis(ctx, symbol: str):
-    await ctx.send(f"Wait karein, **{symbol.upper()}** ka data analyze ho raha hai...")
+@bot.command()
+async def analyze(ctx, symbol: str):
+    await ctx.send(f"Analysing {symbol.upper()} with deep indicators...")
     
-    # Ticker formatting for PSX (adding suffix .KA or similar)
-    ticker_symbol = f"{symbol.upper()}.KA"
+    # Data fetch
+    df = yf.download(f"{symbol.upper()}.KA", period="1y", interval="1d")
     
-    try:
-        # Fetching data for the last 6 months
-        df = yf.download(ticker_symbol, period="6mo", interval="1d")
-        if df.empty:
-            df = yf.download(symbol.upper(), period="6mo", interval="1d")
-            if df.empty:
-                await ctx.send(f"❌ {symbol.upper()} ka data nahi mila. Ticker spelling check karein.")
-                return
+    if df.empty:
+        await ctx.send("Symbol not found.")
+        return
 
-        # Handle multi-index columns returned by yfinance
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        close_prices = df['Close']
-
-        # 1. RSI (Relative Strength Index) Calculation
-        delta = close_prices.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        current_rsi = rsi.iloc[-1]
-
-        # 2. MACD (Moving Average Convergence Divergence) Calculation
-        exp1 = close_prices.ewm(span=12, adjust=False).mean()
-        exp2 = close_prices.ewm(span=26, adjust=False).mean()
-        macd = exp1 - exp2
-        signal_line = macd.ewm(span=9, adjust=False).mean()
-        current_macd = macd.iloc[-1]
-        current_signal = signal_line.iloc[-1]
-
-        # 3. Stochastic Oscillator Calculation
-        low_14 = close_prices.rolling(window=14).min()
-        high_14 = close_prices.rolling(window=14).max()
-        stoch_k = 100 * ((close_prices - low_14) / (high_14 - low_14))
-        current_stoch_k = stoch_k.iloc[-1]
-
-        # ---- Bullish/Bearish Signal & Confidence Logic ----
-        bullish_score = 0
-        bearish_score = 0
-        
-        # RSI Logic
-        if current_rsi < 30: 
-            bullish_score += 2
-        elif current_rsi > 70: 
-            bearish_score += 2
-        
-        # MACD Logic
-        if current_macd > current_signal: 
-            bullish_score += 2
-        else: 
-            bearish_score += 2
-        
-        # Stochastic Logic
-        if current_stoch_k < 20: 
-            bullish_score += 2
-        elif current_stoch_k > 80: 
-            bearish_score += 2
-
-        # Confidence Calculation
-        confidence = (max(bullish_score, bearish_score) / 6) * 100
-        
-        if bullish_score > bearish_score:
-            action = "🟢 BUY / BULLISH"
-        elif bearish_score > bullish_score:
-            action = "🔴 SELL / BEARISH"
-        else:
-            action = "🟡 NEUTRAL / HOLD"
-
-        # Formatted Output Message
-        reply_msg = (
-            f"📊 **Stock Analysis for {symbol.upper()}**\n\n"
-            f"📈 **Technical Indicators:**\n"
-            f"• RSI (14): **{current_rsi:.2f}**\n"
-            f"• MACD: **{current_macd:.4f}** (Signal Line: **{current_signal:.4f}**)\n"
-            f"• Stochastic K: **{current_stoch_k:.2f}%**\n\n"
-            f"💡 **Trading Signal:** {action}\n"
-            f"🎯 **Confidence Level:** {confidence:.1f}%\n"
-        )
-        await ctx.send(reply_msg)
-
-    except Exception as e:
-        await ctx.send(f"⚠️ Technical Error aa gaya hai: {str(e)[:100]}")
+    # Indicators Calculation
+    df.ta.rsi(length=14, append=True)
+    df.ta.macd(append=True)
+    df.ta.bbands(length=20, append=True)
+    df.ta.sma(length=50, append=True)
+    
+    last = df.iloc[-1]
+    
+    # Volume Analysis
+    vol_avg = df['Volume'].rolling(window=20).mean().iloc[-1]
+    vol_status = "High Volume" if last['Volume'] > vol_avg else "Low Volume"
+    
+    # Breakout Logic
+    breakout = "BULLISH BREAKOUT" if last['Close'] > last['BBU_20_2.0'] else "Consolidation"
+    
+    reply = (
+        f"📊 **Deep Market Analysis: {symbol.upper()}**\n"
+        f"💰 **Price:** {last['Close']:.2f} PKR\n"
+        f"📈 **Volume Status:** {vol_status}\n"
+        f"🚀 **Breakout Status:** {breakout}\n"
+        f"⚡ **RSI:** {last['RSI_14']:.2f} | **MACD:** {last['MACD_12_26_9']:.2f}\n"
+        f"⛓️ **Bollinger Upper Band:** {last['BBU_20_2.0']:.2f}\n"
+        f"💡 **Candle Status:** {'Bullish' if last['Close'] > last['Open'] else 'Bearish'}"
+    )
+    await ctx.send(reply)
 
 bot.run(os.environ['DISCORD_TOKEN'])
