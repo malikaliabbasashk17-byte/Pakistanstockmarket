@@ -6,14 +6,14 @@ import numpy as np
 import os
 import asyncio
 
-# Watchlist define karna zaroori hai
-WATCHLIST = ['UBL', 'OGDC', 'LUCK', 'ENGRO', 'PIOC', 'UNITY']
+# Watchlist define
+WATCHLIST = ['UBL', 'OGDC', 'LUCK', 'ENGRO', 'PIOC', 'UNITY', 'TSML']
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help') 
 
-# Technical Indicators Calculation Engine
 def calculate_indicators(symbol):
     try:
         ticker = f"{symbol.upper()}.KA"
@@ -46,7 +46,7 @@ def calculate_indicators(symbol):
 
 @bot.event
 async def on_ready():
-    print(f'✅ Bot is fully running: {bot.user}')
+    print(f'✅ Bot is online: {bot.user}')
 
 @bot.command(aliases=['analyze', 'psx_anal'])
 async def psx(ctx, symbol: str):
@@ -62,8 +62,8 @@ async def psx(ctx, symbol: str):
         await ctx.send(f"❌ Could not fetch data for {symbol.upper()}.")
 
 @bot.command()
-async def calls(ctx, mode: str):
-    msg = await ctx.send(f"🔄 Scanning market for {mode.upper()}...")
+async def calls(ctx, mode: str = "swing"):
+    msg = await ctx.send(f"🔄 Scanning market...")
     bullish, bearish = [], []
     
     for s in WATCHLIST:
@@ -75,8 +75,8 @@ async def calls(ctx, mode: str):
                 bearish.append(f"{s} (RSI: {data['rsi']:.1f})")
         
     res = (f"🚀 **{mode.upper()} Results:**\n\n"
-           f"🟢 **Bullish:**\n{', '.join(bullish) if bullish else 'Koi nahi'}\n\n"
-           f"🔴 **Bearish:**\n{', '.join(bearish) if bearish else 'Koi nahi'}")
+           f"🟢 **Bullish:** {', '.join(bullish) if bullish else 'Koi nahi'}\n"
+           f"🔴 **Bearish:** {', '.join(bearish) if bearish else 'Koi nahi'}")
     await msg.edit(content=res)
 
 bot.run(os.environ['DISCORD_TOKEN'])
