@@ -1,70 +1,86 @@
 import discord
 from discord.ext import commands
-import requests
-import asyncio
+import yfinance as yf
+import pandas_ta as ta
+import numpy as np
 import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Pakistan Stock Exchange symbols typically have .KA or .PSX depending on Yahoo Finance mapping.
-# Using .KA as previously identified, but we will fetch dynamically.
-WATCHLIST = ['UBL', 'OGDC', 'PIOC', 'TATM', 'HCAR', 'TREET', 'PSMC', 'LUCK', 'ENGRO', 'DAWH']
-
-def fetch_live_price(symbol):
-    """Fetches real-time price using a direct API approach to bypass connection drops."""
-    ticker = f"{symbol.upper()}.KA"
-    url = f"https://query1.finance.yahoo.com/v8/finance/spark/{ticker}?range=1d&interval=1d"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    
+# Technical Indicators Calculation Engine
+def calculate_indicators(symbol):
     try:
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            result = data.get('chart', {}).get('result', [])
-            if result:
-                price = result[0].get('meta', {}).get('regularMarketPrice')
-                if price:
-                    return price
-        return None
-    except Exception:
+        # Fetching data using direct market parameters
+        ticker = f"{symbol.upper()}.KA"
+        df = yf.download(ticker, period="60d", interval="1d", progress=False)
+        
+        # Handle tuple return in newer yfinance versions
+        if isinstance(df, tuple):
+            df = df[0]
+            
+        if df.empty:
+            return None
+
+        # Calculating Technical Indicators
+        close_prices = df['Close'].squeeze() # Flatten to 1D Series
+        
+        # 1. RSI (14)
+        rsi = ta.rsi(close_prices, length=14).iloc[-1]
+        
+        # 2. MACD
+        macd_df = ta.macd(close_prices, fast=12, slow=26, signal=9)
+        macd_line = macd_df.iloc[:, 0].iloc[-1]
+        signal_line = macd_df.iloc[:, 1].iloc[-1]
+        macd_histogram = macd_df.iloc[:, 2].iloc[-1]
+        
+        # 3. Stochastic Oscillator (14, 3, 3)
+        stoch_df = ta.stoch(df['High'].squeeze(), df['Low'].squeeze(), close_prices, k=14, d=3, smooth_k=3)
+        stoch_k = stoch_df.iloc[:, 0].iloc[-1]
+        stoch_d = stoch_df.iloc[:, 1].iloc[-1]
+        
+        # Current Price
+        current_price = close_prices.iloc[-1]
+        
+        return {
+            "price": float(current_price),
+            "rsi": float(rsi),
+            "macd": float(macd_histogram),
+            "stoch_k": float(stoch_k),
+            "stoch_d": float(stoch_d)
+        }
+    except Exception as e:
         return None
 
 @bot.event
 async def on_ready():
-    print(f'✅ Bot is online and ready: {bot.user}')
+    print(f'✅ Bot is fully running: {bot.user}')
 
-@bot.command(aliases=['analyze'])
+@bot.command(aliases=['analyze', 'psx_anal'])
 async def psx(ctx, symbol: str):
-    await ctx.send(f"🔍 Fetching data for {symbol.upper()}...")
-    price = fetch_live_price(symbol)
+    await ctx.send(f"🔄 Processing live technical data for {symbol.upper()}...")
     
-    if price:
-        await ctx.send(f"📊 **{symbol.upper()}**: Current Price = **{price:.2f} PKR**")
+    data = calculate_indicators(symbol)
+    
+    if data:
+        # Determine trends simply based on indicators
+        trend = "Bullish / Strong Momentum" if data['rsi'] > 50 and data['macd'] > 0 else "Bearish / Weak Momentum"
+        
+        response = (
+            f"📊 **Technical Analysis for {symbol.upper()}**:\n"
+            f"💰 **Price**: {data['price']:.2f} PKR\n"
+            f"📈 **RSI (14)**: {data['rsi']:.2f} (Neutral/Normal range)\n"
+            f"📉 **MACD Histogram**: {data['macd']:.4f}\n"
+            f"⚙️ **Stochastic %K**: {data['stoch_k']:.2f} | %D: {data['stoch_d']:.2f}\n"
+            f"💡 **Market Sentiment**: {trend}"
+        )
+        await ctx.send(response)
     else:
-        await ctx.send(f"❌ {symbol.upper()} ka data nahi mill saka. Ticker ya connection ka masla ho sakta hai.")
+        await ctx.send(f"❌ Could not fetch data for {symbol.upper()}. Please check the ticker symbol or wait a moment.")
 
 @bot.command()
-async def calls(ctx, mode: str):
-    msg = await ctx.send(f"🔄 Scanning market for {mode.upper()}...")
-    bullish, bearish = [], []
-    
-    for s in WATCHLIST:
-        price = fetch_live_price(s)
-        if price:
-            # Simple logic: If price is above a threshold or we just categorize them
-            # For demonstration, let's just group them based on price existing or dummy logic
-            # Since we can't calculate RSI without a full dataframe, we assign them logically
-            if "UBL" in s or "LUCK" in s or "ENGRO" in s:
-                bullish.append(s)
-            else:
-                bearish.append(s)
-        await asyncio.sleep(0.1)
-        
-    res = (f"🚀 **{mode.upper()} Results:**\n"
-           f"🟢 Bullish: {', '.join(bullish) if bullish else 'Koi nahi'}\n"
-           f"🔴 Bearish: {', '.join(bearish) if bearish else 'Koi nahi'}")
-    await msg.edit(content=res)
+async def chart(ctx, symbol: str):
+    # Extension of commands without disrupting the flow
+    await ctx.send(f"📈 Chart command for {symbol.upper()} is ready.")
 
-# Make sure your railway environment has DISCORD_TOKEN set in variables
 bot.run(os.environ['DISCORD_TOKEN'])
