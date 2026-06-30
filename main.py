@@ -1,31 +1,20 @@
 import discord
 from discord.ext import commands
-import requests
-from bs4 import BeautifulSoup
+import investpy
 import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-def get_psx_price(symbol):
-    # PSX ki official ya reliable source se scraping
-    url = f"https://dps.psx.com.pk/symbol/{symbol.upper()}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        # Price selector (PSX website structure ke mutabiq)
-        price = soup.find('div', {'class': 'symbol_quote_last'}).text.strip()
-        return price
-    except:
-        return None
-
 @bot.command()
 async def psx(ctx, symbol: str):
-    price = get_psx_price(symbol)
-    if price:
+    try:
+        # Investpy ka PSX data fetcher
+        search_result = investpy.search_quotes(text=symbol, products=['stocks'], countries=['pakistan'], n_results=1)
+        data = search_result.retrieve_recent_data()
+        price = data['Close'].iloc[-1]
         await ctx.send(f"📊 **{symbol.upper()}**: Current Price = **{price} PKR**")
-    else:
-        await ctx.send(f"❌ {symbol.upper()} ka data fetch nahi ho saka. Symbol check karein.")
+    except Exception as e:
+        await ctx.send(f"❌ Data nahi mila. Error: {str(e)}")
 
 bot.run(os.environ['DISCORD_TOKEN'])
