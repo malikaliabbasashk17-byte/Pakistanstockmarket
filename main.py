@@ -4,13 +4,15 @@ import yfinance as yf
 import pandas_ta as ta
 import numpy as np
 import os
-# Bot ke top par intents ke neeche ye add karein
-bot.remove_command('help') 
+import asyncio
+
+# Watchlist define karna zaroori hai
+WATCHLIST = ['UBL', 'OGDC', 'LUCK', 'ENGRO', 'PIOC', 'UNITY']
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
+bot.remove_command('help') 
 
-# Technical Indicators Calculation Engine
 # Technical Indicators Calculation Engine
 def calculate_indicators(symbol):
     try:
@@ -19,17 +21,14 @@ def calculate_indicators(symbol):
         if isinstance(df, tuple): df = df[0]
         if df.empty: return None
 
-        # Indicators
         close = df['Close'].squeeze()
         rsi = ta.rsi(close, length=14).iloc[-1]
         bb = ta.bbands(close, length=20)
         
-        # Signals & Levels
         price = close.iloc[-1]
         bb_upper = bb.iloc[:, 2].iloc[-1]
         bb_lower = bb.iloc[:, 0].iloc[-1]
         
-        # Target & Stoploss
         tp = price * 1.05 
         sl = price * 0.95 
         
@@ -45,9 +44,12 @@ def calculate_indicators(symbol):
     except Exception as e:
         return None
 
+@bot.event
+async def on_ready():
+    print(f'✅ Bot is fully running: {bot.user}')
+
 @bot.command(aliases=['analyze', 'psx_anal'])
 async def psx(ctx, symbol: str):
-    await ctx.send(f"🔄 Processing live technical data for {symbol.upper()}...")
     data = calculate_indicators(symbol)
     if data:
         response = (f"📈 **Pro Analysis: {symbol.upper()}**\n"
@@ -59,23 +61,12 @@ async def psx(ctx, symbol: str):
     else:
         await ctx.send(f"❌ Could not fetch data for {symbol.upper()}.")
 
-        )
-        await ctx.send(response)
-    else:
-        await ctx.send(f"❌ Could not fetch data for {symbol.upper()}. Please check the ticker symbol or wait a moment.")
-
-@bot.command()
-async def chart(ctx, symbol: str):
-    # Extension of commands without disrupting the flow
-    await ctx.send(f"📈 Chart command for {symbol.upper()} is ready.")
 @bot.command()
 async def calls(ctx, mode: str):
     msg = await ctx.send(f"🔄 Scanning market for {mode.upper()}...")
     bullish, bearish = [], []
     
-    # Use loop with thread to prevent freezing
     for s in WATCHLIST:
-        # Running calculation in thread to keep bot responsive
         data = await asyncio.to_thread(calculate_indicators, s)
         if data:
             if data['rsi'] > 55:
@@ -87,7 +78,5 @@ async def calls(ctx, mode: str):
            f"🟢 **Bullish:**\n{', '.join(bullish) if bullish else 'Koi nahi'}\n\n"
            f"🔴 **Bearish:**\n{', '.join(bearish) if bearish else 'Koi nahi'}")
     await msg.edit(content=res)
-
-    
 
 bot.run(os.environ['DISCORD_TOKEN'])
