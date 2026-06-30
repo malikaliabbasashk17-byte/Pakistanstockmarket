@@ -82,5 +82,24 @@ async def psx(ctx, symbol: str):
 async def chart(ctx, symbol: str):
     # Extension of commands without disrupting the flow
     await ctx.send(f"📈 Chart command for {symbol.upper()} is ready.")
+@bot.command()
+async def calls(ctx, mode: str):
+    msg = await ctx.send(f"🔄 Scanning market for {mode.upper()}...")
+    bullish, bearish = [], []
+    
+    for s in WATCHLIST:
+        data = calculate_indicators(s)
+        if data:
+            if data['rsi'] > 55:
+                bullish.append(f"{s} (RSI: {data['rsi']:.1f})")
+            elif data['rsi'] < 45:
+                bearish.append(f"{s} (RSI: {data['rsi']:.1f})")
+        await asyncio.sleep(0.5)
+        
+    res = (f"🚀 **{mode.upper()} Results:**\n\n"
+           f"🟢 **Bullish:**\n{', '.join(bullish) if bullish else 'Koi nahi'}\n\n"
+           f"🔴 **Bearish:**\n{', '.join(bearish) if bearish else 'Koi nahi'}")
+    await msg.edit(content=res)
+    
 
 bot.run(os.environ['DISCORD_TOKEN'])
