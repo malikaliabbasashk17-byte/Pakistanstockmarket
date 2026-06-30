@@ -2,15 +2,19 @@ import discord
 from discord.ext import commands
 import os
 
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
-# Command files ko load karna
-initial_extensions = ['cogs.trading', 'cogs.analysis']
+# IMPORTANT: Extension load karte waqt dot (.) notation use karein
+extensions = ['cogs.analysis', 'cogs.trading']
 
-if __name__ == '__main__':
-    for extension in initial_extensions:
-        bot.load_extension(extension)
+@bot.event
+async def on_ready():
+    for ext in extensions:
+        try:
+            await bot.load_extension(ext)
+            print(f"✅ Loaded {ext}")
+        except Exception as e:
+            print(f"❌ Error loading {ext}: {e}")
+    print(f"Bot is ready as {bot.user}")
 
 bot.run(os.environ['DISCORD_TOKEN'])
