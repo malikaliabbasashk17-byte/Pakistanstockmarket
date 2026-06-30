@@ -1,6 +1,2 @@
-discord.py
-yfinance
-pandas
-pandas_ta
 requests
 beautifulsoup4
