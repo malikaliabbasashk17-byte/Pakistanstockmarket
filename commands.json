@@ -1,0 +1,6 @@
+{
+    "psx": "Shows stock price and RSI for {symbol}",
+    "analyze": "Same as psx command",
+    "chart": "Shows bullish or bearish status for {symbol}"
+}
+
