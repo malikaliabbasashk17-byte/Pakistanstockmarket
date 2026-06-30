@@ -14,13 +14,12 @@ bot.remove_command('help')
 async def on_ready():
     print(f'✅ Bot active: {bot.user}')
 
-@bot.command(aliases=['psx', 'analyze'])
-async def analyze(ctx, symbol: str):
+@bot.command()
+async def psx(ctx, symbol: str):
     try:
         ticker_name = f"{symbol.upper()}.KA"
         df = yf.download(ticker_name, period="100d", interval="1d", progress=False)
         
-        # DataFrame fix
         if isinstance(df, tuple): df = df[0]
         if df.empty:
             await ctx.send(f"❌ No data found for {symbol.upper()}.")
@@ -30,7 +29,6 @@ async def analyze(ctx, symbol: str):
         high = df['High'].squeeze()
         low = df['Low'].squeeze()
         
-        # Indicators
         rsi = ta.rsi(close, length=14).iloc[-1]
         macd = ta.macd(close)
         bb = ta.bbands(close, length=20)
@@ -47,6 +45,6 @@ async def analyze(ctx, symbol: str):
         
         await ctx.send(msg)
     except Exception as e:
-        await ctx.send(f"❌ Error occurred: {str(e)}")
+        await ctx.send(f"❌ Error occurred.")
 
 bot.run(os.environ['DISCORD_TOKEN'])
