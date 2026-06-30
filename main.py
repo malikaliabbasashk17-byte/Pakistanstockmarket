@@ -1,20 +1,32 @@
 import discord
 from discord.ext import commands
-import os
+import json
 
-bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-# IMPORTANT: Extension load karte waqt dot (.) notation use karein
-extensions = ['cogs.analysis', 'cogs.trading']
+# Command load karne ka function
+def load_commands():
+    with open('commands.json', 'r') as f:
+        return json.load(f)
 
 @bot.event
 async def on_ready():
-    for ext in extensions:
-        try:
-            await bot.load_extension(ext)
-            print(f"✅ Loaded {ext}")
-        except Exception as e:
-            print(f"❌ Error loading {ext}: {e}")
-    print(f"Bot is ready as {bot.user}")
+    print("Bot is ready and dynamic commands are loaded!")
 
-bot.run(os.environ['DISCORD_TOKEN'])
+# Dynamic command handler
+@bot.event
+async def on_message(message):
+    if message.author == bot.user: return
+    
+    if message.content.startswith('!'):
+        cmd = message.content.split(' ')[0][1:]
+        data = load_commands()
+        
+        if cmd in data:
+            await message.channel.send(f"Command '{cmd}' is active: {data[cmd]}")
+            # Yahan apni actual logic call karein
+    
+    await bot.process_commands(message)
+
+bot.run('YOUR_TOKEN')
