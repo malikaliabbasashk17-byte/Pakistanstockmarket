@@ -28,7 +28,7 @@ def calculate_indicators(symbol):
         stoch = ta.stoch(high, low, close)
         sma = ta.sma(close, length=50).iloc[-1]
         
-        # Pivot Points (Simple)
+        # Pivot Points
         pivot = (high.iloc[-1] + low.iloc[-1] + close.iloc[-1]) / 3
         
         # Signals
