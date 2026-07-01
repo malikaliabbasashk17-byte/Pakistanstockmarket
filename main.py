@@ -2,59 +2,58 @@ import discord
 from discord.ext import commands
 import yfinance as yf
 import pandas_ta as ta
+import asyncio
 import os
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# PSX Top 30 Volume Active Stocks
-WATCHLIST = [
-    'UBL', 'OGDC', 'LUCK', 'ENGRO', 'PIOC', 'UNITY', 'TSML', 'PSO', 'TRG', 'FFC',
-    'HUBC', 'HBL', 'MCB', 'MEBL', 'EPCL', 'AVN', 'TATM', 'TELE', 'PRL', 'DGKC',
-    'KOHC', 'MLCF', 'PAEL', 'KEL', 'SNGP', 'SSGC', 'GAS', 'BYCO', 'PPL', 'NBP'
-]
+# Core Watchlist - Top Volume PSX
+STOCKS = ['UBL', 'OGDC', 'LUCK', 'ENGRO', 'PIOC', 'UNITY', 'TSML', 'PSO', 'TRG', 'FFC', 'HBL', 'MCB', 'MEBL', 'EPCL', 'AVN']
 
-def analyze_stock(symbol):
+def get_market_intelligence(symbol):
     try:
-        # ".KA" format for PSX
-        df = yf.download(f"{symbol.upper()}.KA", period="60d", interval="1d", progress=False)
+        df = yf.download(f"{symbol}.KA", period="100d", interval="1d", progress=False)
         if isinstance(df, tuple): df = df[0]
         if df.empty: return None
-        
+
         close = df['Close'].squeeze()
-        high = df['High'].squeeze()
-        low = df['Low'].squeeze()
-        
+        # Indicators
         rsi = ta.rsi(close, length=14).iloc[-1]
         macd = ta.macd(close).iloc[:, 0].iloc[-1]
-        stoch = ta.stoch(high, low, close).iloc[:, 0].iloc[-1]
+        bb = ta.bbands(close, length=20)
         
-        # Scoring System
+        # Super-Brain Logic: Multi-Layer Scoring
         score = 0
-        if rsi < 40: score += 3
+        if rsi < 45: score += 4
         if macd > 0: score += 3
-        if stoch < 30: score += 4
+        if close.iloc[-1] > bb.iloc[:, 0].iloc[-1]: score += 3
         
-        if score >= 6:
-            return {"rsi": rsi, "score": score}
-        return None
+        return {"score": score, "rsi": rsi, "price": close.iloc[-1]}
     except: return None
 
 @bot.command()
 async def calls(ctx, mode: str):
-    await ctx.send(f"🔄 Scanning Top 30 PSX stocks for {mode.upper()}...")
-    bullish = []
+    msg = await ctx.send(f"🤖 **Initializing PSX Revolution Engine...**")
     
-    # Scanning through the list
-    for s in WATCHLIST:
-        data = analyze_stock(s)
-        if data:
-            bullish.append(f"🟢 **{s}** | Score: {data['score']}/10 | RSI: {data['rsi']:.1f}")
-            
-    if bullish:
-        await ctx.send(f"🚀 **Strong Bullish Found ({mode.upper()}):**\n" + "\n".join(bullish))
+    results = []
+    for s in STOCKS:
+        data = get_market_intelligence(s)
+        if data and data['score'] >= 7:
+            results.append(f"✅ **{s}** | Score: {data['score']}/10 | RSI: {data['rsi']:.1f} | 💰 {data['price']:.2f}")
+    
+    if results:
+        await msg.edit(content=f"🔥 **High Conviction {mode.upper()} Signals:**\n" + "\n".join(results))
     else:
-        await ctx.send("📉 Koi strong bullish stock nahi mila.")
+        await msg.edit(content="💤 Market Neutral: No signals meeting high-confidence criteria.")
+
+@bot.command()
+async def stats(ctx, symbol: str):
+    data = get_market_intelligence(symbol.upper())
+    if data:
+        await ctx.send(f"📊 **{symbol.upper()} Deep Stats:**\nScore: {data['score']}/10\nRSI: {data['rsi']:.1f}\nPrice: {data['price']:.2f}")
+    else:
+        await ctx.send("❌ Data unavailable.")
 
 bot.run(os.environ['DISCORD_TOKEN'])
